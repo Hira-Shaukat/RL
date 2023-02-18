@@ -1,0 +1,279 @@
+clc
+clear all
+close all
+
+%%% system 1
+ [Aa,Ba,Ca,Da] = tf2ss([299 109],[174 174 73 48 176 174 73 48 176 174 73 48 176 174 73 48 176 174 73 48 176 48 176 174 73 48 176 174 73 48 176]);
+[Aa,Ba,Ca,Da] = tf2ss([299 109 34 67],[174 174 73 48 176 174 73 48 176 174]);
+M=eye(length(Aa));
+K=Aa;
+D=Ba*Ca;
+B2=Ba;
+C1=ones(1,length(Aa));
+C2=ones(1,length(Aa));
+E=[eye(length(Aa)) zeros(length(Aa));zeros(length(Aa)) M];
+A=[zeros(length(Aa)) eye(length(Aa));-K -D];
+B=[zeros(length(Aa),1); B2];
+C=[C1 C2];
+r=3;
+sys=dss(A,B,C,0,E);
+isstable(sys)
+% %%% system 2
+% % [Aa,Ba,Ca,Da] = tf2ss([309 139],[ 99 46 78 33 99 46 78 33 99 46 78 33 99 46 78 33 99 46 78 33 99]);
+% [Aa,Ba,Ca,Da] = tf2ss([309 139],[2 0 99 46 78 33 99 46 78 33 99 46 ]);
+% M=eye(length(Aa));
+% K=Aa;
+% D=Ba*Ca;
+% B2=Ba;
+% C1=ones(1,length(Aa));
+% C2=ones(1,length(Aa));
+% E=[eye(length(Aa)) zeros(length(Aa));zeros(length(Aa)) M];
+% A=[zeros(length(Aa)) eye(length(Aa));-K -D];
+% B=[zeros(length(Aa),1); B2];
+% C=[C1 C2];
+
+%r=4;
+sys=dss(A,B,C,0,E);
+% G=ss(inv(E)*A,B,C,0);
+[gs,gns]=stabsep(sys);
+% gs=ss2des(gs);
+eig(gs)
+eig(gns)
+n=length(A);
+Ps = lyap(gs.A,gs.B*gs.B',[],gs.E);
+Qs = lyap(gs.A',gs.C'*gs.C,[],gs.E'); 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%% Applying Mustaqim BT
+[up,sp,vp]=svd(Ps);
+[uq,sq,vq]=svd(Qs);
+vr=up*sqrt(sp);
+vl=uq*sqrt(sq);
+EE=vl'*vr;
+[ue,se,ve]=svd(EE);
+sl=vl*ue*sqrt(ve);
+sr=vr*ue*sqrt(ve);
+% ebal=sl'*gs.E*sr;
+abal=sl'*gs.A*sr;
+bbal=sl'*gs.B;
+cbal=gs.C*sr;
+% ered=ebal(1:r,1:r);
+ared=abal(1:r,1:r);
+bred=bbal(1:r,:);
+cred=cbal(:,1:r);
+dred=Da;
+
+sys_must=ss(ared,bred,cred,0)
+
+bodemag(sys,sys_must)
+
+%%%%%%%%%% Applying Mustaqim FLBT
+w1=.01;
+w2=1;
+wnum=10;
+Xlim = ds_gauss('C', eye(length(gs.A)), gs.A, gs.B, w1, w2, wnum);  % Gramian is G_pcf=X*X'
+Ylim = ds_gauss('O', eye(length(gs.A)), gs.A, gs.C, w1, w2, wnum);
+Psl=Xlim*Xlim';
+Qsl=Ylim*Ylim';
+[upl,spl,vpl]=svd(Psl);
+[uql,sql,vql]=svd(Qsl);
+vrl=upl*sqrt(spl);
+vll=uql*sqrt(sql);
+EEl=vll'*vrl;
+[uel,sel,vel]=svd(EEl);
+sll=vll*uel*sqrt(vel);
+srl=vrl*uel*sqrt(vel);
+% eball=sll'*eye(length(gs.E))*srl;
+aball=sll'*gs.A*srl;
+bball=sll'*gs.B;
+cball=gs.C*srl;
+% eredl=eball(1:r,1:r);
+aredl=aball(1:r,1:r);
+bredl=bball(1:r,:);
+credl=cball(:,1:r);
+sys_mustl=ss(aredl,bredl,credl,0)
+
+bodemag(sys,sys_must,sys_mustl)
+
+[n,m]=size(B)
+[p,n]=size(C);
+% % % % %%%%%Stabilization
+Q = eye(length(A));%ones ( length(A), length(A) ) ;
+R = 101;
+om = 0.01 ;
+As = inv(E)*(A + om*eye ( length(A) ) );
+[ Kk , Xc , ff ] = lqr ( As , B , Q , R ) ;
+[ Kk , Xo , ff ] = lqr ( As' , C' , Q , R ) ;
+Kc=B'*Xc*E;
+% sys=dss(A-B*Kc,B,C,0,E);
+% isstable(sys)
+Ko=E*Xo*C';
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%Unlimited method SOBTp
+Ps = lyap(A-B*Kc,B*B',[],E);
+Qs = lyap((A-Ko*C)',C'*C,[],E');
+n=n/2;
+cp=Ps(1:n,1:n);
+cv=Ps(n+1:2*n,n+1:2*n);
+op=Qs(1:n,1:n);
+ov=Qs(n+1:2*n,n+1:2*n);
+rp=chol(cp);
+lp=chol(op);
+rv=chol(cv);
+lv=chol(ov);
+[up,sp,vp]=svd(rp'*lp);
+[uv,sv,vv]=svd(rv'*M'*lv);
+W=lv*vv(:,1:r)*inv(sqrt(sp(1:r,1:r)));
+T=rp*up(:,1:r)*inv(sqrt(sp(1:r,1:r)));
+Mr=W'*M*T;
+Dr=W'*D*T;
+Kr=W'*K*T;
+B2r=W'*B2;
+C1r=C1*T;
+C2r=C2*T;
+Er=[eye(r), zeros(r);zeros(r) Mr];
+Ar=[zeros(r) eye(r); -Kr -Dr];
+Br=[zeros(r,m);B2r];
+Cr=[C1r C2r];
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%Unlimited method SOBTpv
+[upv,spv,vpv]=svd(rp'*M'*lv);
+wpv=lv*vpv(:,1:r)*inv(sqrt(spv(1:r,1:r)));
+tpv=rp*upv(:,1:r)*inv(sqrt(spv(1:r,1:r)));
+
+mrpv=eye(r);
+drpv=wpv'*D*tpv;
+krpv=wpv'*K*tpv;
+b2rpv=wpv'*B2;
+c1rpv=C1*tpv;
+c2rpv=C2*tpv;
+Erpv=[eye(r), zeros(r);zeros(r) mrpv];
+Arpv=[zeros(r) eye(r); -krpv -drpv];
+Brpv=[zeros(r,m);b2rpv];
+Crpv=[c1rpv c2rpv];
+sys_rpv=dss(Arpv,Brpv,Crpv,0,Erpv);
+sys=dss(A,B,C,0,E);
+sys_r=dss(Ar,Br,Cr,0,Er);
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%Limited method SOBTp
+w1=.1;w2=2;
+wnum=225;
+Xlim = ds_gauss('C', E, A-B*Kc, B, w1, w2, wnum);  % Gramian is G_pcf=X*X'
+Ylim = ds_gauss('O', E,(A-Ko*C)', C, w1, w2, wnum);
+rplim=Xlim(1:n,1:n);
+lplim=Ylim(1:n,1:n);
+rvlim=Xlim(n+1:2*n,n+1:2*n);
+lvlim=Ylim(n+1:2*n,n+1:2*n);
+[uplim,splim,vplim]=svd(rplim'*lplim);
+[uvlim,svlim,vvlim]=svd(rvlim'*M'*lvlim);
+Wlim=lvlim*vvlim(:,1:r)*inv(sqrt(splim(1:r,1:r)));
+Tlim=rplim*uplim(:,1:r)*inv(sqrt(splim(1:r,1:r)));
+Mrlim=Wlim'*M*Tlim;
+Drlim=Wlim'*D*Tlim;
+Krlim=Wlim'*K*Tlim;
+B2rlim=Wlim'*B2;
+C1rlim=C1*Tlim;
+C2rlim=C2*Tlim;
+Erlim=[eye(r), zeros(r);zeros(r) Mrlim];
+Arlim=[zeros(r) eye(r); -Krlim -Drlim];
+Brlim=[zeros(r,m);B2rlim];
+Crlim=[C1rlim C2rlim];
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%Limited method SOBTpv
+[uplimpv,splimpv,vplimpv]=svd(rplim'*M*lvlim);
+Wlimpv=lvlim*vplimpv(:,1:r)*inv(sqrt(splimpv(1:r,1:r)));
+Tlimpv=rplim*uplimpv(:,1:r)*inv(sqrt(splimpv(1:r,1:r)));
+Mrlimpv=eye(r);
+Drlimpv=Wlimpv'*D*Tlimpv;
+Krlimpv=Wlimpv'*K*Tlimpv;
+B2rlimpv=Wlimpv'*B2;
+C1rlimpv=C1*Tlimpv;
+C2rlimpv=C2*Tlimpv;
+Erlimpv=[eye(r), zeros(r);zeros(r) Mrlimpv];
+Arlimpv=[zeros(r) eye(r); -Krlimpv -Drlimpv];
+Brlimpv=[zeros(r,m);B2rlimpv];
+Crlimpv=[C1rlimpv C2rlimpv];
+sys_rlim=dss(Arlim,Brlim,Crlim,0,Erlim);
+sys_rlimpv=dss(Arlimpv,Brlimpv,Crlimpv,0,Erlimpv);
+%%%%%%%%%%%%%%%%%%%%%%%%
+sys_rpv=dss(Arpv,Brpv,Crpv,0,Erpv);
+sys=dss(A,B,C,0,E);
+sys_r=dss(Ar,Br,Cr,0,Er);
+figure
+bodemag(sys,sys_must,sys_r,sys_rpv)
+figure
+bodemag(sys-sys_must,sys-sys_r,sys-sys_rpv);
+
+%%%%%%%%%%Plotting
+esobtp=sys-sys_r;
+esobtpv=sys-sys_rpv;
+esobtplim=sys-sys_rlim;
+esobtplimpv=sys-sys_rlimpv;
+
+
+% figure
+% subplot(211)
+% bodemag(esobtp)
+% hold on
+% bodemag(esobtpv)
+% bodemag(esobtplim)
+% bodemag(esobtplimpv)
+% legend('SOBTp','SOBTpv','FLSOBTp','FLSOBTpv')
+% % figure
+% subplot(212)
+% bodemag(esobtp)
+% hold on
+% bodemag(esobtpv)
+% bodemag(esobtplim)
+% bodemag(esobtplimpv)
+% legend('SOBTp','SOBTpv','FLSOBTp','FLSOBTpv')
+% 
+% 
+figure
+subplot(221)
+bodemag(sys)
+hold on
+bodemag(sys_r)
+% bodemag(sys_rpv)
+bodemag(sys_rlim)
+% bodemag(sys_rlimpv)
+% legend('Original LSS','SOBTp','SOBTpv','FLSOBTp','FLSOBTpv')
+subplot(222)
+% figure
+bodemag(sys)
+hold on
+% bodemag(sys_r)
+bodemag(sys_rpv)
+% bodemag(sys_rlim)
+bodemag(sys_rlimpv)
+% legend('Original LSS','SOBTp','SOBTpv','FLSOBTp','FLSOBTpv')
+subplot(223)
+% figure
+bodemag(sys)
+hold on
+bodemag(sys_r)
+% bodemag(sys_rpv)
+bodemag(sys_rlim)
+% bodemag(sys_rlimpv)
+subplot(224)
+% figure
+bodemag(sys)
+hold on
+% bodemag(sys_r)
+bodemag(sys_rpv)
+% bodemag(sys_rlim)
+bodemag(sys_rlimpv)
+
+figure
+subplot(211)
+bodemag(sys)
+hold on
+bodemag(sys_must)
+bodemag(sys_mustl)
+ legend('Original LSS','Proposed Tech-I','Propsd Tech-I FL') 
+ subplot(212)
+bodemag(sys)
+hold on
+bodemag(sys_must)
+bodemag(sys_mustl)
+legend('Original LSS','Proposed Tech-I','Propsd Tech-I FL') 
+ 
